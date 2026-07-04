@@ -1,0 +1,113 @@
+name: MLProject CI Workflow
+
+# Trigger: Berjalan otomatis setiap ada push atau pull request ke branch main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-mlproject:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout kode dari repositori GitHub ke server runner
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. Setup Miniconda untuk membaca conda.yaml Anda
+    - name: Setup Conda Environment
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        python-version: "3.10"
+
+    # 3. Install MLflow secara global di server runner agar bisa mengeksekusi perintah 'mlflow run'
+    - name: Install MLflow CLI
+      run: |
+        pip install "mlflow==2.22.0"
+
+    # 4. CRITERIA BASIC (2 pts): Mengeksekusi 'mlflow run' dengan nama eksperimen yang konsisten
+    - name: Run MLflow Project (Train Model)
+      shell: bash
+      run: |
+        cd Workflow-CI/MLProject
+        
+        # Mengaktifkan fungsi conda agar terbaca di shell ini
+        eval "$(conda shell.bash hook)"
+        
+        # Memberitahu MLflow di mana lokasi dasar Conda berada
+        export MLFLOW_CONDA_HOME="$(conda info --base)"
+        
+        # Set environment variable untuk experiment name yang konsisten
+        export MLFLOW_EXPERIMENT_NAME="Heart_Disease_Classification"
+        export MLFLOW_ALLOW_FILE_STORE=true
+        
+        # Inisialisasi eksperimen MLflow dengan experiment-name agar tidak bentrok ID
+        mlflow experiments create -n "Heart_Disease_Classification" 2>/dev/null || true
+        
+        # Jalankan project MLflow dengan mengunci nama eksperimennya
+        mlflow run . -e main --experiment-name "Heart_Disease_Classification"
+
+    # 5. CRITERIA SKILLED (3 pts): Menyimpan artefak hasil training ke GitHub Actions Artifacts
+    - name: Upload Training Artifacts to GitHub
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlproject-training-results
+        path: |
+          Workflow-CI/MLProject/classification_report.txt
+          Workflow-CI/MLProject/confusion_matrix.png
+          Workflow-CI/MLProject/mlruns/
+        retention-days: 7
+
+    # ==========================================
+    # CRITERIA ADVANCE (4 pts): DOCKER IMAGE + PUSH KE DOCKER HUB
+    # ==========================================
+
+    # 6. Mencari Model & Build Docker Image
+    - name: Build Docker Image
+      shell: bash
+      run: |
+        cd Workflow-CI/MLProject
+        eval "$(conda shell.bash hook)"
+        export MLFLOW_CONDA_HOME="$(conda info --base)"
+
+        echo "=== Mencari lokasi model di dalam mlruns ==="
+        # MLflow 2.x menyimpan model logging di skema baru:
+        # mlruns/<exp_id>/models/m-<hash>/artifacts/  (BUKAN lagi mlruns/<exp_id>/<run_id>/artifacts/<nama_model>)
+        # Jadi kita cari berdasarkan file penanda 'MLmodel', bukan nama folder.
+        MODEL_DIR=$(find mlruns -type f -name "MLmodel" -exec dirname {} \; | head -n 1)
+
+        if [ -z "$MODEL_DIR" ]; then
+          echo "❌ GAGAL: File MLmodel tidak ditemukan di dalam folder mlruns!"
+          exit 1
+        fi
+
+        echo "✅ Model ditemukan di: $MODEL_DIR"
+
+        mlflow models generate-dockerfile \
+          -m "$MODEL_DIR" \
+          -d docker_context \
+          --env-manager conda
+
+        # Patch: Anaconda kini wajib ToS acceptance non-interaktif, ini tetap dibutuhkan
+        sed -i '/^FROM /a ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes' docker_context/Dockerfile
+
+        docker build -t "heart-disease-model:latest" docker_context
+
+    # 7. Login ke Docker Hub
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # 8. Push Docker Image ke Docker Hub
+    - name: Tag and Push Docker Image
+      shell: bash
+      run: |
+        docker images | grep heart-disease-model
+        docker tag heart-disease-model:latest ${{ secrets.DOCKERHUB_USERNAME }}/heart-disease-predictor:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/heart-disease-predictor:latest

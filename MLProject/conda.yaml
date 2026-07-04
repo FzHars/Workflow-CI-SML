@@ -1,0 +1,14 @@
+name: heart_disease_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - mlflow==2.22.0
+      - numpy
+      - pandas
+      - scikit-learn
+      - scipy
+      - skops            
+      - matplotlib
