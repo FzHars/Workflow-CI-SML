@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, f1_score
 def train_with_tuning():
     mlflow.set_experiment("Heart_Disease_Tuning")
     
-    data_dir = "heart_disease_preprocessing"
+    data_dir = "../preprocessing/heart_disease_preprocessing"
     X_train = pd.read_csv(os.path.join(data_dir, 'X_train_scaled.csv'))
     X_test = pd.read_csv(os.path.join(data_dir, 'X_test_scaled.csv'))
     y_train = pd.read_csv(os.path.join(data_dir, 'y_train.csv')).values.ravel()

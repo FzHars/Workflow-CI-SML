@@ -15,16 +15,17 @@ from sklearn.metrics import (
 )
 
 def train_model():
-    # 1. Set nama eksperimen di MLflow - GUNAKAN ENVIRONMENT VARIABLE JIKA ADA
-    experiment_name = os.environ.get("MLFLOW_EXPERIMENT_NAME", "Heart_Disease_Classification")
-    mlflow.set_experiment(experiment_name)
+    # 1. Set nama eksperimen di MLflow
+    mlflow.set_experiment("Heart_Disease_Classification")
+
+    mlflow.autolog()
     
     # 2. Mulai run MLflow
     with mlflow.start_run(run_name="Run_Classification"):
-        print(f"Mulai melatih model dengan eksperimen: {experiment_name}...")
+        print("Mulai melatih model...")
         
         # Path data preprocessing sesuai struktur folder lokal Anda saat ini
-        data_dir = "heart_disease_preprocessing"
+        data_dir = "../preprocessing/heart_disease_preprocessing"
         
         # 3. Memuat data siap latih
         X_train = pd.read_csv(os.path.join(data_dir, 'X_train_scaled.csv'))
@@ -86,10 +87,8 @@ def train_model():
         mlflow.sklearn.log_model(model, "heart_disease_model")
         
         # Hapus file lokal sementara agar folder kerja Anda tetap bersih
-        if os.path.exists(report_path): 
-            os.remove(report_path)
-        if os.path.exists(cm_path): 
-            os.remove(cm_path)
+        if os.path.exists(report_path): os.remove(report_path)
+        if os.path.exists(cm_path): os.remove(cm_path)
         
         print("✓ Model beserta 2 artefak tambahan berhasil dilatih dan diunggah!")
         print(f"Accuracy: {acc:.4f} | F1-Score: {f1:.4f}")
