@@ -25,7 +25,7 @@ def train_model():
         print("Mulai melatih model...")
         
         # Path data preprocessing sesuai struktur folder lokal Anda saat ini
-        data_dir = "../preprocessing/heart_disease_preprocessing"
+        data_dir = "heart_disease_preprocessing"
         
         # 3. Memuat data siap latih
         X_train = pd.read_csv(os.path.join(data_dir, 'X_train_scaled.csv'))
